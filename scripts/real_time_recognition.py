@@ -11,10 +11,11 @@ config_path = "config.json"
 with open(config_path, "r") as config_file:
     config = json.load(config_file)
 
-encodings_dir = os.getenv("ENCODINGS_DIR", config["encodings_dir"])
-threshold = float(os.getenv("FACE_RECOGNITION_THRESHOLD", config["face_recognition_threshold"]))
-resize_factor = float(os.getenv("RESIZE_FACTOR", config["resize_factor"]))
-process_frame_interval = int(os.getenv("PROCESS_FRAME_INTERVAL", config["process_frame_interval"]))
+# Use values from config.json
+encodings_dir = config["encodings_dir"]  # Updated to directly use the config value
+threshold = float(config["face_recognition_threshold"])  # Use threshold value from config
+resize_factor = float(config["resize_factor"])  # Resize factor from config
+process_frame_interval = int(config["process_frame_interval"])  # Process interval from config
 
 # Initialize known encodings and names
 known_encodings = []
