@@ -7,23 +7,25 @@ def encode_faces(dataset_path, output_file):
     Encodes all faces in the dataset directory and saves them to a file.
 
     Args:
-        dataset_path (str): Path to the dataset (e.g., 'known_faces/processed').
-        output_file (str): Path to save the encodings (e.g., 'face_encodings.pkl').
+        dataset_path (str): Path to the dataset (e.g., '/Users/suryakiran/Preprocessed_Faces').
+        output_file (str): Path to save the encodings (e.g., '/Users/suryakiran/FaceRecognitionData/face_encodings.pkl').
     """
     known_encodings = []
     known_names = []
 
+    # Get list of person folders and sort them in alphabetical order
+    person_folders = sorted([f for f in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, f))])
+
     # Loop through each person's folder
-    for person_name in os.listdir(dataset_path):
+    for person_name in person_folders:
         person_folder = os.path.join(dataset_path, person_name)
-        if not os.path.isdir(person_folder):
-            continue
 
         # Loop through each image of the person
         for image_name in os.listdir(person_folder):
             image_path = os.path.join(person_folder, image_name)
-            # Only process image files
-            if not image_name.lower().endswith(('.jpg', '.jpeg', '.png')):
+
+            # Only process image files (skip directories and non-image files)
+            if not os.path.isfile(image_path) or not image_name.lower().endswith(('.jpg', '.jpeg', '.png')):
                 continue
 
             print(f"Processing {image_path}...")
@@ -44,6 +46,8 @@ def encode_faces(dataset_path, output_file):
     print(f"Encodings saved to {output_file}")
 
 if __name__ == "__main__":
-    dataset_path = "known_faces/processed"  # Path to the processed dataset
-    output_file = "face_encodings.pkl"      # Output file for the encodings
+    # External paths outside the project directory
+    dataset_path = "/Users/suryakiran/Preprocessed_Faces"  # Path to the processed dataset
+    output_file = "/Users/suryakiran/FaceRecognitionData/face_encodings.pkl"  # Path to save encodings
+    
     encode_faces(dataset_path, output_file)
