@@ -1,7 +1,6 @@
 {
-    "encodings_dir": "encodings",
-    "face_recognition_threshold": 0.6,
-    "resize_factor": 0.5,
-    "process_frame_interval": 2
-  }
-  
+  "encodings_dir": "/Users/suryakiran/FaceRecognitionData", 
+  "face_recognition_threshold": 0.6,
+  "resize_factor": 0.5,
+  "process_frame_interval": 2
+}
