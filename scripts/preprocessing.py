@@ -81,7 +81,7 @@ if __name__ == "__main__":
     # List of source directories (update as needed)
     src_dirs = [
         "/Users/suryakiran/Downloads/archive/train",  # Example: VGGFace2 train dataset
-        "/Users/suryakiran/Desktop/Surya"            # Example: Personal folder
+        "/Users/suryakiran/FaceRecognitionData/Surya" # Example: Personal folder
     ]
     dst_dir = "/Users/suryakiran/Preprocessed_Faces"  # Unified destination folder
     max_samples_per_folder = 50  # Limit to 50 sampled images per folder
