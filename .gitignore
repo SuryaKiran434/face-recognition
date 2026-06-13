@@ -1,4 +1,28 @@
-venv/
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+
+# Virtualenvs
+venv/
+.venv/
+
+# Editors / IDEs
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Test / build artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Face-recognition data (large binary blobs; should not be checked in)
+*.pkl
+*.npy
+*.npz
