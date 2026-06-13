@@ -12,6 +12,7 @@ import face_recognition
 import numpy as np
 
 from face_recognition_app.config import Config
+from face_recognition_app.matching import match_faces
 
 
 logger = logging.getLogger(__name__)
@@ -52,16 +53,9 @@ def process_frame(frame, known_encodings, known_names, cfg):
         for top, right, bottom, left in face_locations
     ]
 
-    enc_array = np.asarray(face_encodings)
-    diffs = known_encodings[np.newaxis, :, :] - enc_array[:, np.newaxis, :]
-    dists = np.linalg.norm(diffs, axis=2)
-    best_idx = np.argmin(dists, axis=1)
-    best_dist = dists[np.arange(len(enc_array)), best_idx]
-
-    names = [
-        known_names[int(i)] if d < cfg.face_recognition_threshold else "Unknown"
-        for i, d in zip(best_idx, best_dist)
-    ]
+    names = match_faces(
+        known_encodings, known_names, face_encodings, cfg.face_recognition_threshold
+    )
     return face_locations, names
 
 

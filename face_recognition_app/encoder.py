@@ -9,14 +9,12 @@ from concurrent.futures import ProcessPoolExecutor
 import face_recognition
 import numpy as np
 
+from face_recognition_app.matching import largest_face
+
 
 logger = logging.getLogger(__name__)
 
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".heic")
-
-
-def _largest_face(face_locations):
-    return max(face_locations, key=lambda loc: (loc[2] - loc[0]) * (loc[1] - loc[3]))
 
 
 def _encode_one(task):
@@ -26,7 +24,7 @@ def _encode_one(task):
     if not face_locations:
         return None
     if len(face_locations) > 1:
-        face_locations = [_largest_face(face_locations)]
+        face_locations = [largest_face(face_locations)]
     encs = face_recognition.face_encodings(image, face_locations)
     if not encs:
         return None
