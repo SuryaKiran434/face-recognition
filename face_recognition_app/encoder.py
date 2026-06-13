@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
 
 import face_recognition
 import numpy as np
 
+
+logger = logging.getLogger(__name__)
 
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".heic")
 
@@ -46,8 +49,7 @@ def _collect_tasks(dataset_path, model):
             yield person_name, image_path, model
 
 
-def encode_faces(dataset_path, output_file, model="cnn", workers=None,
-                 on_progress=None):
+def encode_faces(dataset_path, output_file, model="cnn", workers=None):
     """Encode faces under dataset_path into a .npz at output_file.
 
     Returns the number of faces encoded.
@@ -65,6 +67,8 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None,
         workers = 1 if model == "cnn" else max(1, (os.cpu_count() or 2) - 1)
 
     tasks = list(_collect_tasks(dataset_path, model))
+    logger.info("Encoding %d image(s) with %d worker(s), model=%s",
+                len(tasks), workers, model)
 
     known_encodings = []
     known_names = []
@@ -75,8 +79,11 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None,
                 person_name, encoding = result
                 known_encodings.append(encoding)
                 known_names.append(person_name)
-            if on_progress is not None:
-                on_progress(i, len(tasks), len(known_encodings))
+            else:
+                logger.debug("No face encoded in image %d", i)
+            if i % 50 == 0:
+                logger.info("  %d/%d processed (%d encoded)",
+                            i, len(tasks), len(known_encodings))
 
     if not known_encodings:
         raise ValueError("no faces encoded")
@@ -86,4 +93,5 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None,
         encodings=np.asarray(known_encodings),
         names=np.asarray(known_names),
     )
+    logger.info("Encodings saved to %s (%d faces)", output_file, len(known_encodings))
     return len(known_encodings)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import random
 import shutil
@@ -11,6 +12,8 @@ from PIL import Image
 
 pillow_heif.register_heif_opener()
 
+
+logger = logging.getLogger(__name__)
 
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".heic")
 
@@ -31,14 +34,13 @@ def resize_image(image_path, max_width=800, max_height=800):
     return new_path
 
 
-def sample_and_process(src_folder, dst_folder, max_samples, on_event=None):
+def sample_and_process(src_folder, dst_folder, max_samples):
     all_images = [
         img for img in os.listdir(src_folder)
         if img.lower().endswith(_IMAGE_EXTS)
     ]
     if not all_images:
-        if on_event:
-            on_event("skip", src_folder, None)
+        logger.info("No valid images in %s; skipping", src_folder)
         return
 
     sampled = random.sample(all_images, min(len(all_images), max_samples))
@@ -49,19 +51,16 @@ def sample_and_process(src_folder, dst_folder, max_samples, on_event=None):
         try:
             shutil.copy(src, dst)
             resize_image(dst)
-            if on_event:
-                on_event("processed", image_name, dst_folder)
-        except Exception as e:
-            if on_event:
-                on_event("error", src, str(e))
+            logger.info("Processed %s -> %s", image_name, dst_folder)
+        except Exception:
+            logger.exception("Error processing %s", src)
 
 
-def preprocess_datasets(src_dirs, dst_dir, max_samples_per_folder=50, on_event=None):
+def preprocess_datasets(src_dirs, dst_dir, max_samples_per_folder=50):
     os.makedirs(dst_dir, exist_ok=True)
     for src_dir in src_dirs:
         if not os.path.exists(src_dir):
-            if on_event:
-                on_event("skip", src_dir, None)
+            logger.warning("Source directory %s does not exist; skipping", src_dir)
             continue
 
         for item in os.listdir(src_dir):
@@ -69,9 +68,9 @@ def preprocess_datasets(src_dirs, dst_dir, max_samples_per_folder=50, on_event=N
             if os.path.isdir(item_path):
                 dst_person = os.path.join(dst_dir, item)
                 os.makedirs(dst_person, exist_ok=True)
-                sample_and_process(item_path, dst_person, max_samples_per_folder, on_event)
+                sample_and_process(item_path, dst_person, max_samples_per_folder)
             elif item.lower().endswith(_IMAGE_EXTS):
                 dst_flat = os.path.join(dst_dir, os.path.basename(src_dir))
                 os.makedirs(dst_flat, exist_ok=True)
-                sample_and_process(src_dir, dst_flat, max_samples_per_folder, on_event)
+                sample_and_process(src_dir, dst_flat, max_samples_per_folder)
                 break  # flat-folder case handled once
