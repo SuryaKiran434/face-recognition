@@ -65,9 +65,10 @@ def run_recognizer(cfg: Config):
     if len(known_encodings) == 0:
         raise ValueError(f"no .npz encoding files found in {cfg.encodings_dir}")
 
-    video_capture = cv2.VideoCapture(0)
+    logger.info("Opening video source: %r", cfg.camera_source)
+    video_capture = cv2.VideoCapture(cfg.camera_source)
     if not video_capture.isOpened():
-        raise RuntimeError("could not open video stream")
+        raise RuntimeError(f"could not open video source: {cfg.camera_source!r}")
 
     last_face_locations = []
     last_face_names = []

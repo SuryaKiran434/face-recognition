@@ -3,5 +3,6 @@
   "face_recognition_threshold": 0.6,
   "resize_factor": 0.5,
   "process_frame_interval": 2,
-  "face_detection_model": "hog"
+  "face_detection_model": "hog",
+  "camera_source": 0
 }
