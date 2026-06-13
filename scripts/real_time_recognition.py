@@ -19,6 +19,7 @@ encodings_dir = config["encodings_dir"]
 threshold = float(config["face_recognition_threshold"])
 resize_factor = float(config["resize_factor"])
 process_frame_interval = int(config["process_frame_interval"])
+detection_model = config.get("face_detection_model", "hog")
 
 
 def load_encodings(encodings_dir):
@@ -26,8 +27,8 @@ def load_encodings(encodings_dir):
     names_list = []
     for file_path in sorted(glob.glob(os.path.join(encodings_dir, "*.npz"))):
         print(f"Loading encodings from {file_path}...")
-        # allow_pickle=False is critical: it prevents arbitrary code execution
-        # from a malicious .npz dropped into the encodings directory.
+        # allow_pickle=False prevents arbitrary code execution from a
+        # malicious .npz dropped into the encodings directory.
         with np.load(file_path, allow_pickle=False) as data:
             encodings_list.append(data["encodings"])
             names_list.append(data["names"])
@@ -45,11 +46,16 @@ if len(known_encodings) == 0:
 
 
 def process_frame(frame):
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    small_frame = cv2.resize(rgb_frame, (0, 0), fx=resize_factor, fy=resize_factor)
+    # Resize first (smaller buffer), then color-convert — ~4x less work
+    # at resize_factor=0.5.
+    small_bgr = cv2.resize(frame, (0, 0), fx=resize_factor, fy=resize_factor)
+    small_frame = cv2.cvtColor(small_bgr, cv2.COLOR_BGR2RGB)
     scale_factor = frame.shape[1] / small_frame.shape[1]
 
-    face_locations = face_recognition.face_locations(small_frame)
+    face_locations = face_recognition.face_locations(small_frame, model=detection_model)
+    if not face_locations:
+        return [], []
+
     face_encodings = face_recognition.face_encodings(small_frame, face_locations)
 
     face_locations = [
@@ -58,15 +64,18 @@ def process_frame(frame):
         for top, right, bottom, left in face_locations
     ]
 
-    names = []
-    for face_encoding in face_encodings:
-        distances = face_recognition.face_distance(known_encodings, face_encoding)
-        min_distance = np.min(distances)
-        if min_distance < threshold:
-            names.append(known_names[int(np.argmin(distances))])
-        else:
-            names.append("Unknown")
+    # Single broadcast subtraction across all faces in the frame, rather
+    # than calling face_distance() per face. Shape: (n_faces, n_known).
+    enc_array = np.asarray(face_encodings)
+    diffs = known_encodings[np.newaxis, :, :] - enc_array[:, np.newaxis, :]
+    dists = np.linalg.norm(diffs, axis=2)
+    best_idx = np.argmin(dists, axis=1)
+    best_dist = dists[np.arange(len(enc_array)), best_idx]
 
+    names = [
+        known_names[int(i)] if d < threshold else "Unknown"
+        for i, d in zip(best_idx, best_dist)
+    ]
     return face_locations, names
 
 
@@ -75,6 +84,10 @@ def main():
     if not video_capture.isOpened():
         print("Error: Could not open video stream.", file=sys.stderr)
         sys.exit(1)
+
+    # Cache last detections so non-detection frames still draw rectangles.
+    last_face_locations = []
+    last_face_names = []
 
     try:
         frame_count = 0
@@ -87,15 +100,14 @@ def main():
             frame_count += 1
             if frame_count % process_frame_interval == 0:
                 start_time = time.time()
-                face_locations, face_names = process_frame(frame)
+                last_face_locations, last_face_names = process_frame(frame)
                 end_time = time.time()
-
-                for (top, right, bottom, left), name in zip(face_locations, face_names):
-                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-                    cv2.putText(frame, name, (left, bottom + 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
                 print(f"Frame processed in {end_time - start_time:.2f} seconds")
+
+            for (top, right, bottom, left), name in zip(last_face_locations, last_face_names):
+                cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+                cv2.putText(frame, name, (left, bottom + 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
             cv2.imshow("Face Recognition", frame)
 
