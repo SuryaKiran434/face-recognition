@@ -1,9 +1,14 @@
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 
+import click
 import face_recognition
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from face_recognition_app.config import Config
 
 
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".heic")
@@ -14,7 +19,6 @@ def _largest_face(face_locations):
 
 
 def _encode_one(task):
-    """Worker: load one image and return (person_name, encoding) or None."""
     person_name, image_path, model = task
     image = face_recognition.load_image_file(image_path)
     face_locations = face_recognition.face_locations(image, model=model)
@@ -45,18 +49,8 @@ def _collect_tasks(dataset_path, model):
 
 
 def encode_faces(dataset_path, output_file, model="cnn", workers=None):
-    """
-    Encode all faces in the dataset directory and save them as .npz.
-
-    Args:
-        dataset_path: Root directory containing one subfolder per person.
-        output_file: Path to write the .npz encodings file.
-        model: "hog" (fast, CPU) or "cnn" (accurate, needs CUDA dlib).
-        workers: Parallel worker count. Defaults to 1 for "cnn" (to avoid
-                 GPU/RAM contention) and cpu_count-1 for "hog".
-    """
     if not os.path.isdir(dataset_path):
-        print(f"Error: dataset path {dataset_path} does not exist.", file=sys.stderr)
+        click.echo(f"Error: dataset path {dataset_path} does not exist.", err=True)
         sys.exit(1)
 
     output_dir = os.path.dirname(output_file)
@@ -67,7 +61,7 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None):
         workers = 1 if model == "cnn" else max(1, (os.cpu_count() or 2) - 1)
 
     tasks = list(_collect_tasks(dataset_path, model))
-    print(f"Encoding {len(tasks)} image(s) with {workers} worker(s), model={model}...")
+    click.echo(f"Encoding {len(tasks)} image(s) with {workers} worker(s), model={model}...")
 
     known_encodings = []
     known_names = []
@@ -79,10 +73,10 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None):
                 known_encodings.append(encoding)
                 known_names.append(person_name)
             if i % 50 == 0:
-                print(f"  {i}/{len(tasks)} processed ({len(known_encodings)} encoded)")
+                click.echo(f"  {i}/{len(tasks)} processed ({len(known_encodings)} encoded)")
 
     if not known_encodings:
-        print("Error: no faces encoded.", file=sys.stderr)
+        click.echo("Error: no faces encoded.", err=True)
         sys.exit(1)
 
     np.savez(
@@ -90,10 +84,29 @@ def encode_faces(dataset_path, output_file, model="cnn", workers=None):
         encodings=np.asarray(known_encodings),
         names=np.asarray(known_names),
     )
-    print(f"Encodings saved to {output_file} ({len(known_encodings)} faces)")
+    click.echo(f"Encodings saved to {output_file} ({len(known_encodings)} faces)")
+
+
+@click.command()
+@click.option("--dataset", required=True,
+              type=click.Path(exists=True, file_okay=False, dir_okay=True),
+              help="Root directory with one subfolder per person.")
+@click.option("--output", "output_file", type=click.Path(dir_okay=False),
+              help="Output .npz path. Defaults to <encodings_dir>/face_encodings.npz.")
+@click.option("--model", type=click.Choice(["hog", "cnn"]), default="cnn",
+              show_default=True,
+              help='Detection model. "hog" is fast on CPU; "cnn" needs GPU.')
+@click.option("--workers", type=int, default=None,
+              help="Parallel worker count. Default: cpu-1 (hog) or 1 (cnn).")
+@click.option("--config", "config_path", default=None,
+              type=click.Path(dir_okay=False),
+              help="Path to config.json (used only to default --output).")
+def main(dataset, output_file, model, workers, config_path):
+    if output_file is None:
+        cfg = Config.load(config_path)
+        output_file = os.path.join(cfg.encodings_dir, "face_encodings.npz")
+    encode_faces(dataset, output_file, model=model, workers=workers)
 
 
 if __name__ == "__main__":
-    dataset_path = "/Users/suryakiran/Preprocessed_Faces"
-    output_file = "/Users/suryakiran/FaceRecognitionData/face_encodings.npz"
-    encode_faces(dataset_path, output_file)
+    main()
