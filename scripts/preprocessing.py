@@ -9,11 +9,18 @@ pillow_heif.register_heif_opener()
 
 def resize_image(image_path, max_width=800, max_height=800):
     """
-    Resize the image to fit within the specified dimensions.
+    Resize the image to fit within the specified dimensions and normalize it
+    to JPEG. Removes the original file if its extension differs from .jpg.
+    Returns the path of the resulting file.
     """
     with Image.open(image_path) as img:
         img.thumbnail((max_width, max_height))
-        img.save(image_path)
+        rgb = img.convert("RGB")
+        new_path = os.path.splitext(image_path)[0] + ".jpg"
+        rgb.save(new_path, "JPEG", quality=90)
+    if new_path != image_path:
+        os.remove(image_path)
+    return new_path
 
 def preprocess_datasets(src_dirs, dst_dir, max_samples_per_folder=50):
     """
