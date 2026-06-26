@@ -22,7 +22,8 @@ htmlcov/
 build/
 dist/
 
-# Face-recognition data (large binary blobs; should not be checked in)
+# Face-recognition data (biometric data / large binary blobs; never commit)
+encodings/
 *.pkl
 *.npy
 *.npz
