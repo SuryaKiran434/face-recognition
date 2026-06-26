@@ -14,14 +14,12 @@ def test_known_face_wins():
     assert status.confidence == 1.0
 
 
-def test_known_face_wins_even_with_package_and_dwell():
-    # A recognised person carrying a bag and lingering is still "known".
+def test_known_face_wins_even_with_package():
+    # A recognised person carrying a bag is still "known".
     status = classify(
         face_names=["Surya"],
         person_count=1,
         carried_objects=["suitcase"],
-        dwell_seconds=30.0,
-        dwell_threshold=8.0,
     )
     assert status.label == "known"
     assert status.name == "Surya"
@@ -47,26 +45,9 @@ def test_unknown_carrying_object_is_likely_delivery():
     assert any("carrying" in r for r in status.reasons)
 
 
-def test_unknown_lingering_is_likely_delivery():
-    status = classify(
-        face_names=["Unknown"],
-        person_count=1,
-        carried_objects=[],
-        dwell_seconds=10.0,
-        dwell_threshold=8.0,
-    )
-    assert status.label == "likely_delivery"
-    assert any("lingering" in r for r in status.reasons)
-
-
-def test_dwell_below_threshold_stays_unknown():
-    status = classify(
-        face_names=["Unknown"],
-        person_count=1,
-        carried_objects=[],
-        dwell_seconds=3.0,
-        dwell_threshold=8.0,
-    )
+def test_unknown_lingering_is_not_delivery():
+    # Lingering alone no longer implies delivery — only a carried object does.
+    status = classify(face_names=["Unknown"], person_count=1, carried_objects=[])
     assert status.label == "unknown"
 
 

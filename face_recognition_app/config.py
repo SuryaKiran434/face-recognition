@@ -38,7 +38,6 @@ class DetectionConfig:
     enabled: bool = True
     weights: str = "yolov8n.pt"
     confidence: float = 0.4
-    person_dwell_seconds: float = 8.0
     # Proximity gate: a person only counts as "near" (and thus triggers an
     # event) when their bounding box is at least this fraction of the frame
     # height. 0 disables the gate (any detected person triggers).
@@ -51,7 +50,6 @@ class DetectionConfig:
             enabled=bool(data.get("enabled", True)),
             weights=str(data.get("weights", "yolov8n.pt")),
             confidence=float(data.get("confidence", 0.4)),
-            person_dwell_seconds=float(data.get("person_dwell_seconds", 8.0)),
             near_min_height_ratio=float(data.get("near_min_height_ratio", 0.0)),
         )
 

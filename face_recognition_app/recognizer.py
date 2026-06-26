@@ -116,7 +116,7 @@ def _carried_boxes(detections):
     return [d.box for d in detections if d.label != PERSON_LABEL]
 
 
-def _select_people(frame, detections, faces, cfg, dwell=0.0):
+def _select_people(frame, detections, faces, cfg):
     """Classify the people that should drive an event, applying the proximity
     gate. Returns (people, present, max_height_ratio).
 
@@ -131,18 +131,10 @@ def _select_people(frame, detections, faces, cfg, dwell=0.0):
 
     if person_boxes:
         near = near_person_boxes(person_boxes, frame_h, ratio)
-        people = classify_people(
-            near, faces, carried,
-            dwell_seconds=dwell,
-            dwell_threshold=cfg.detection.person_dwell_seconds,
-        ) if near else []
+        people = classify_people(near, faces, carried) if near else []
         present = bool(near)
     else:
-        people = classify_people(
-            [], faces, carried,
-            dwell_seconds=dwell,
-            dwell_threshold=cfg.detection.person_dwell_seconds,
-        )
+        people = classify_people([], faces, carried)
         present = bool(people)
 
     max_ratio = max((person_height_ratio(b, frame_h) for b in person_boxes), default=0.0)
@@ -217,10 +209,9 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
                 )
                 last_detections = detector.detect(frame)
 
-                dwell = gate.dwell_seconds()
                 faces = list(zip(last_face_locations, last_face_names))
                 last_people, present, max_ratio = _select_people(
-                    frame, last_detections, faces, cfg, dwell
+                    frame, last_detections, faces, cfg
                 )
                 last_status = aggregate_status(last_people)
                 logger.debug(

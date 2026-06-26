@@ -41,8 +41,6 @@ def classify(
     face_names,
     person_count,
     carried_objects,
-    dwell_seconds=0.0,
-    dwell_threshold=8.0,
 ):
     """Classify what is happening at the door this frame.
 
@@ -52,13 +50,10 @@ def classify(
         person_count: number of people from the object detector (0 when none /
             detection disabled).
         carried_objects: iterable of detected object labels (e.g. ["suitcase"]).
-        dwell_seconds: how long a person has been continuously present.
-        dwell_threshold: dwell (seconds) above which lingering counts as a
-            delivery hint.
 
     Returns a DoorStatus. Precedence: a known face always wins (it's the
-    reliable signal); otherwise an unknown person is escalated to
-    "likely_delivery" when carrying something or lingering, else "unknown".
+    reliable signal); otherwise an unknown person carrying a bag/suitcase is
+    "likely_delivery", else "unknown".
     """
     known_names = [n for n in face_names if n and n != UNKNOWN_NAME]
     carried = [obj for obj in carried_objects if obj in CARRIED_OBJECT_LABELS]
@@ -76,20 +71,10 @@ def classify(
             reasons += (f"{len(known_names)} known faces present",)
         return DoorStatus("known", name, 1.0, reasons)
 
-    # 3. Unknown person — look for delivery hints.
-    delivery_reasons = []
+    # 3. Unknown person carrying something -> likely a delivery.
     if carried:
-        delivery_reasons.append("carrying " + ", ".join(sorted(set(carried))))
-    if dwell_seconds >= dwell_threshold:
-        delivery_reasons.append(f"lingering {dwell_seconds:.0f}s at the door")
-
-    if delivery_reasons:
-        return DoorStatus(
-            "likely_delivery",
-            None,
-            0.6,
-            ("unknown face", *delivery_reasons),
-        )
+        reason = "carrying " + ", ".join(sorted(set(carried)))
+        return DoorStatus("likely_delivery", None, 0.6, ("unknown face", reason))
 
     # 4. Plain unknown person.
     return DoorStatus("unknown", None, 0.5, ("unknown person at the door",))
@@ -139,20 +124,13 @@ def _contains(box, point):
     return x1 <= px <= x2 and y1 <= py <= y2
 
 
-def classify_people(
-    person_boxes,
-    faces,
-    carried_boxes=(),
-    dwell_seconds=0.0,
-    dwell_threshold=8.0,
-):
+def classify_people(person_boxes, faces, carried_boxes=()):
     """Classify every person in a frame for a multi-person email.
 
     Args:
         person_boxes: list of (x1,y1,x2,y2) person boxes from the detector.
         faces: list of ((top,right,bottom,left), name) from face recognition.
         carried_boxes: list of (x1,y1,x2,y2) boxes for carried objects.
-        dwell_seconds / dwell_threshold: lingering hint for delivery.
 
     Returns a list of PersonResult — one per person, each with the box to crop.
     Faces are associated to the person box that contains their centre; a face
@@ -172,29 +150,23 @@ def classify_people(
                 used_faces.add(i)
                 names_here.append(name)
         carrying = any(_contains(pbox, _center(cb)) for cb in carried_boxes)
-        results.append(_person_result(pbox, names_here, carrying,
-                                       dwell_seconds, dwell_threshold))
+        results.append(_person_result(pbox, names_here, carrying))
 
     # Recognised/seen faces not inside any person box still get their own entry.
     for i, (fbox, name) in enumerate(faces_xyxy):
         if i not in used_faces:
-            results.append(_person_result(fbox, [name], False,
-                                           dwell_seconds, dwell_threshold))
+            results.append(_person_result(fbox, [name], False))
 
     return results
 
 
-def _person_result(box, names, carrying, dwell_seconds, dwell_threshold):
+def _person_result(box, names, carrying):
     box = tuple(int(v) for v in box)
     known = [n for n in names if n and n != UNKNOWN_NAME]
     if known:
         return PersonResult("known", known[0], box, (f"recognised {known[0]}",))
-
-    reasons = []
     if carrying:
-        reasons.append("carrying an object")
-    if dwell_seconds >= dwell_threshold:
-        reasons.append(f"lingering {dwell_seconds:.0f}s")
-    if reasons:
-        return PersonResult("likely_delivery", None, box, ("unknown face", *reasons))
+        return PersonResult(
+            "likely_delivery", None, box, ("unknown face", "carrying an object")
+        )
     return PersonResult("unknown", None, box, ("unknown person",))
