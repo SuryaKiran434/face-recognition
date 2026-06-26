@@ -13,7 +13,12 @@ import numpy as np
 
 from face_recognition_app import notify
 from face_recognition_app.config import Config
-from face_recognition_app.decision import DoorStatus, aggregate_status, classify_people
+from face_recognition_app.decision import (
+    UNKNOWN_NAME,
+    DoorStatus,
+    aggregate_status,
+    classify_people,
+)
 from face_recognition_app.detector import (
     PERSON_LABEL,
     build_detector,
@@ -22,6 +27,7 @@ from face_recognition_app.detector import (
 )
 from face_recognition_app.events import EventGate, purge_old, save_event
 from face_recognition_app.matching import match_faces
+from face_recognition_app.smoothing import LabelSmoother
 
 
 logger = logging.getLogger(__name__)
@@ -116,6 +122,28 @@ def _carried_boxes(detections):
     return [d.box for d in detections if d.label != PERSON_LABEL]
 
 
+def _face_area(face_trbl):
+    top, right, bottom, left = face_trbl
+    return (bottom - top) * (right - left)
+
+
+def _smooth_primary_face(faces, smoother):
+    """Stabilise the name of the largest (closest) face via the smoother, so a
+    one-frame misread doesn't flip known<->unknown. Returns a new faces list.
+
+    When no face is visible the smoother still sees an "Unknown" tick (a person
+    may be present with their face hidden), keeping the window honest."""
+    if not faces:
+        smoother.update(UNKNOWN_NAME)
+        return faces
+    idx = max(range(len(faces)), key=lambda i: _face_area(faces[i][0]))
+    loc, name = faces[idx]
+    smoothed = smoother.update(name)
+    updated = list(faces)
+    updated[idx] = (loc, smoothed)
+    return updated
+
+
 def _select_people(frame, detections, faces, cfg):
     """Classify the people that should drive an event, applying the proximity
     gate. Returns (people, present, max_height_ratio).
@@ -183,6 +211,7 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
         debounce_frames=cfg.events.debounce_frames,
         cooldown_seconds=cfg.events.cooldown_seconds,
     )
+    name_smoother = LabelSmoother(cfg.detection.label_smoothing_window)
 
     logger.info("Opening video source: %r", cfg.camera_source)
     video_capture = cv2.VideoCapture(cfg.camera_source)
@@ -212,6 +241,14 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
                 last_detections = detector.detect(frame)
 
                 faces = list(zip(last_face_locations, last_face_names))
+                if not faces and not _person_boxes(last_detections):
+                    name_smoother.reset()  # nobody here; start fresh next visit
+                else:
+                    faces = _smooth_primary_face(faces, name_smoother)
+                # Reflect the smoothed name in the drawn labels too.
+                last_face_locations = [loc for loc, _ in faces]
+                last_face_names = [name for _, name in faces]
+
                 last_people, present, max_ratio = _select_people(
                     frame, last_detections, faces, cfg
                 )

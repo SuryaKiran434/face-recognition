@@ -42,6 +42,9 @@ class DetectionConfig:
     # event) when their bounding box occupies at least this fraction of the
     # frame area. 0 disables the gate (any detected person triggers).
     near_min_area_ratio: float = 0.0
+    # Temporal smoothing for the recognised name: number of recent frames the
+    # majority vote runs over. 1 disables smoothing (raw per-frame result).
+    label_smoothing_window: int = 5
 
     @classmethod
     def from_dict(cls, data):
@@ -51,6 +54,7 @@ class DetectionConfig:
             weights=str(data.get("weights", "yolov8n.pt")),
             confidence=float(data.get("confidence", 0.4)),
             near_min_area_ratio=float(data.get("near_min_area_ratio", 0.0)),
+            label_smoothing_window=int(data.get("label_smoothing_window", 5)),
         )
 
 
