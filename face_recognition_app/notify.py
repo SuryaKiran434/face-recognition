@@ -16,6 +16,7 @@ import logging
 import mimetypes
 import os
 import smtplib
+import time
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -51,8 +52,13 @@ def _resolve_creds(sender, password, to):
     return sender, password, to
 
 
-def send(subject, body, attachments=(), sender="", password="", to=""):
-    """Send an email via Gmail SMTP with optional image attachments.
+def send(subject, text_body, html_body="", inline_images=(), attachments=(),
+         sender="", password="", to=""):
+    """Send an email via Gmail SMTP.
+
+    text_body: plain-text fallback. html_body: optional rich HTML. inline_images:
+    iterable of (cid, path) embedded in the HTML via cid: references.
+    attachments: iterable of file paths attached normally.
 
     Returns 0 on success, 1 on credential/config error, 2 on SMTP/network error.
     """
@@ -68,7 +74,18 @@ def send(subject, body, attachments=(), sender="", password="", to=""):
     msg["Subject"] = subject
     msg["From"] = f"Door Monitor <{sender}>"
     msg["To"] = to
-    msg.set_content(body)
+    msg.set_content(text_body)
+
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
+        html_part = msg.get_payload()[-1]
+        for cid, path in inline_images:
+            path = Path(path)
+            if not path.is_file():
+                continue
+            html_part.add_related(
+                path.read_bytes(), maintype="image", subtype="jpeg", cid=f"<{cid}>"
+            )
 
     for path in attachments:
         path = Path(path)
@@ -98,22 +115,123 @@ def send(subject, body, attachments=(), sender="", password="", to=""):
         return 2
 
 
-def send_event_email(event, sender="", password="", to=""):
-    """Email one DoorEvent: subject summary, body with per-person detail, and
-    the full frame + one crop per person attached."""
-    subject = f"Door: {event.summary}"
-    lines = [
-        f"Detected at {event.timestamp}.",
-        "",
-        event.summary,
-        "",
-    ]
-    for i, person in enumerate(event.people, 1):
-        who = person.get("name") or person["label"].replace("_", " ")
-        reasons = ", ".join(person.get("reasons", []))
-        lines.append(f"  {i}. {who}" + (f" — {reasons}" if reasons else ""))
-    lines += ["", "Full frame and per-person images attached."]
+# Per-status presentation: (badge text, badge colour).
+_BADGE = {
+    "known": ("Known", "#2e7d32"),
+    "unknown": ("Unknown", "#ef6c00"),
+    "likely_delivery": ("Likely delivery", "#1565c0"),
+}
 
-    attachments = [event.frame_path, *event.person_paths]
-    return send(subject, "\n".join(lines), attachments=attachments,
-                sender=sender, password=password, to=to)
+
+def _friendly_time(iso_ts):
+    """Turn '2026-06-26T19:20:55' into 'June 26, 2026 at 7:20 PM'."""
+    try:
+        dt = time.strptime(iso_ts, "%Y-%m-%dT%H:%M:%S")
+    except (ValueError, TypeError):
+        return iso_ts
+    hour = dt.tm_hour % 12 or 12
+    ampm = "AM" if dt.tm_hour < 12 else "PM"
+    return (f"{time.strftime('%B', dt)} {dt.tm_mday}, {dt.tm_year} "
+            f"at {hour}:{dt.tm_min:02d} {ampm}")
+
+
+def _headline(people):
+    """A clear, scannable subject/headline for who is at the door."""
+    labels = [p["label"] for p in people]
+    known = [p["name"] for p in people if p["label"] == "known" and p.get("name")]
+    unknown_n = labels.count("unknown")
+
+    if "likely_delivery" in labels:
+        return "📦 Possible delivery at your door"
+    if known and not unknown_n:
+        if len(known) == 1:
+            return f"✅ {known[0]} is at your door"
+        return f"✅ {', '.join(known)} are at your door"
+    if known and unknown_n:
+        return f"👀 {', '.join(known)} + {unknown_n} unknown at your door"
+    if unknown_n == 1:
+        return "⚠️ Unknown person at your door"
+    if unknown_n > 1:
+        return f"⚠️ {unknown_n} unknown people at your door"
+    return "👤 Someone is at your door"
+
+
+def _who(person):
+    return person.get("name") or "Unknown"
+
+
+def _clean_reasons(person):
+    """Drop the redundant 'recognised X' note for known people."""
+    return [r for r in person.get("reasons", []) if not r.startswith("recognised ")]
+
+
+def _build_html(headline, friendly, people):
+    cards = []
+    for i, person in enumerate(people, 1):
+        badge_text, color = _BADGE.get(person["label"], ("Person", "#555"))
+        reasons = _clean_reasons(person)
+        reason_html = (
+            f'<div style="color:#777;font-size:13px;margin-top:6px;">'
+            f'{"; ".join(reasons)}</div>' if reasons else ""
+        )
+        img_html = (
+            f'<img src="cid:person{i}" width="120" '
+            f'style="border-radius:8px;display:block;" alt="person {i}">'
+            if person.get("image") else ""
+        )
+        cards.append(
+            '<table role="presentation" cellpadding="0" cellspacing="0" '
+            'style="width:100%;border:1px solid #eee;border-radius:10px;'
+            'margin-bottom:12px;"><tr>'
+            f'<td style="padding:10px;width:140px;vertical-align:top;">{img_html}</td>'
+            '<td style="padding:10px;vertical-align:top;">'
+            f'<div style="font-size:17px;font-weight:600;color:#222;">{_who(person)}</div>'
+            f'<span style="display:inline-block;margin-top:6px;padding:3px 10px;'
+            f'border-radius:12px;background:{color};color:#fff;font-size:12px;">'
+            f'{badge_text}</span>{reason_html}'
+            '</td></tr></table>'
+        )
+
+    return (
+        '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;'
+        'max-width:560px;margin:0 auto;color:#222;">'
+        f'<h2 style="margin:0 0 2px;">{headline}</h2>'
+        f'<p style="color:#888;margin:0 0 18px;font-size:14px;">{friendly}</p>'
+        f'{"".join(cards)}'
+        '<div style="margin-top:8px;">'
+        '<div style="color:#888;font-size:13px;margin-bottom:6px;">Full view</div>'
+        '<img src="cid:frame" style="width:100%;border-radius:10px;" alt="full frame">'
+        '</div>'
+        '<p style="color:#aaa;font-size:12px;margin-top:18px;">'
+        'Sent by your Door Monitor.</p></div>'
+    )
+
+
+def send_event_email(event, sender="", password="", to=""):
+    """Email one DoorEvent as an intuitive HTML message: a clear headline, a
+    friendly time, and each person shown inline with a status badge."""
+    people = event.people
+    headline = _headline(people)
+    friendly = _friendly_time(event.timestamp)
+
+    # Plain-text fallback for clients that don't render HTML.
+    text_lines = [headline, friendly, ""]
+    for i, person in enumerate(people, 1):
+        badge = _BADGE.get(person["label"], ("Person", ""))[0]
+        reasons = _clean_reasons(person)
+        line = f"{i}. {_who(person)} — {badge}"
+        if reasons:
+            line += f" ({'; '.join(reasons)})"
+        text_lines.append(line)
+
+    inline = [
+        (f"person{i}", p["image"])
+        for i, p in enumerate(people, 1)
+        if p.get("image")
+    ]
+    if event.frame_path:
+        inline.append(("frame", event.frame_path))
+
+    html = _build_html(headline, friendly, people)
+    return send(headline, "\n".join(text_lines), html_body=html,
+                inline_images=inline, sender=sender, password=password, to=to)

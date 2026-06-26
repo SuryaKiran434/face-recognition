@@ -130,6 +130,7 @@ def save_event(frame, people, snapshots_dir, log_path, timestamp):
             "label": person.label,
             "name": person.name,
             "reasons": list(person.reasons),
+            "image": path,
         })
 
     summary = _summarize(people)
@@ -137,10 +138,7 @@ def save_event(frame, people, snapshots_dir, log_path, timestamp):
         "ts": timestamp,
         "summary": summary,
         "frame": frame_path,
-        "people": [
-            {**meta, "image": path}
-            for meta, path in zip(people_meta, person_paths)
-        ],
+        "people": people_meta,
     }
     with open(log_path, "a") as f:
         f.write(json.dumps(record) + "\n")
