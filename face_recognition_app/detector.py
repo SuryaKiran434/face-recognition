@@ -39,6 +39,27 @@ def carried_objects(detections):
     return [d.label for d in detections if d.label != PERSON_LABEL]
 
 
+def person_height_ratio(box, frame_height):
+    """How tall a person box is relative to the frame (0..1). Used as a
+    proximity proxy — a nearby person fills more of the frame."""
+    if not frame_height:
+        return 0.0
+    x1, y1, x2, y2 = box
+    return (y2 - y1) / frame_height
+
+
+def near_person_boxes(person_boxes, frame_height, min_ratio):
+    """Person boxes considered 'near' — tall enough relative to the frame.
+
+    min_ratio <= 0 disables the filter (every person counts as near)."""
+    if min_ratio <= 0:
+        return list(person_boxes)
+    return [
+        box for box in person_boxes
+        if person_height_ratio(box, frame_height) >= min_ratio
+    ]
+
+
 class NullDetector:
     """A detector that finds nothing — used when detection is disabled or the
     optional ultralytics dependency is unavailable."""

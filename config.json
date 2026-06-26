@@ -4,5 +4,10 @@
   "resize_factor": 0.5,
   "process_frame_interval": 2,
   "face_detection_model": "hog",
-  "camera_source": 0
+  "camera_source": 0,
+  "detection": {
+    "enabled": true,
+    "confidence": 0.4,
+    "near_min_height_ratio": 0.5
+  }
 }

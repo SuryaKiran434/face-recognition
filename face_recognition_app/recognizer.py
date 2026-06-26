@@ -13,12 +13,12 @@ import numpy as np
 
 from face_recognition_app import notify
 from face_recognition_app.config import Config
-from face_recognition_app.decision import DoorStatus, classify, classify_people
+from face_recognition_app.decision import DoorStatus, aggregate_status, classify_people
 from face_recognition_app.detector import (
     PERSON_LABEL,
     build_detector,
-    carried_objects,
-    count_people,
+    near_person_boxes,
+    person_height_ratio,
 )
 from face_recognition_app.events import EventGate, purge_old, save_event
 from face_recognition_app.matching import match_faces
@@ -116,6 +116,39 @@ def _carried_boxes(detections):
     return [d.box for d in detections if d.label != PERSON_LABEL]
 
 
+def _select_people(frame, detections, faces, cfg, dwell=0.0):
+    """Classify the people that should drive an event, applying the proximity
+    gate. Returns (people, present, max_height_ratio).
+
+    Only persons whose box is 'near' (tall enough) count. When the detector
+    found no persons at all (detection disabled/unavailable), fall back to
+    faces — proximity can't be measured without person boxes.
+    """
+    frame_h = frame.shape[0]
+    person_boxes = _person_boxes(detections)
+    carried = _carried_boxes(detections)
+    ratio = cfg.detection.near_min_height_ratio
+
+    if person_boxes:
+        near = near_person_boxes(person_boxes, frame_h, ratio)
+        people = classify_people(
+            near, faces, carried,
+            dwell_seconds=dwell,
+            dwell_threshold=cfg.detection.person_dwell_seconds,
+        ) if near else []
+        present = bool(near)
+    else:
+        people = classify_people(
+            [], faces, carried,
+            dwell_seconds=dwell,
+            dwell_threshold=cfg.detection.person_dwell_seconds,
+        )
+        present = bool(people)
+
+    max_ratio = max((person_height_ratio(b, frame_h) for b in person_boxes), default=0.0)
+    return people, present, max_ratio
+
+
 def emit_event(frame, people, cfg, send_email=True):
     """Persist a detection event (frame + per-person crops + log) and, when
     enabled, email it. Never raises — failures are logged so the capture loop
@@ -184,26 +217,17 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
                 )
                 last_detections = detector.detect(frame)
 
-                person_count = count_people(last_detections)
-                present = person_count > 0 or len(last_face_names) > 0
                 dwell = gate.dwell_seconds()
-
                 faces = list(zip(last_face_locations, last_face_names))
-                last_people = classify_people(
-                    _person_boxes(last_detections),
-                    faces,
-                    _carried_boxes(last_detections),
-                    dwell_seconds=dwell,
-                    dwell_threshold=cfg.detection.person_dwell_seconds,
+                last_people, present, max_ratio = _select_people(
+                    frame, last_detections, faces, cfg, dwell
                 )
-                last_status = classify(
-                    last_face_names, person_count,
-                    carried_objects(last_detections),
-                    dwell_seconds=dwell,
-                    dwell_threshold=cfg.detection.person_dwell_seconds,
+                last_status = aggregate_status(last_people)
+                logger.debug(
+                    "Frame in %.2fs -> %s (largest person height=%.2f, near>=%.2f)",
+                    time.time() - start_time, last_status.label,
+                    max_ratio, cfg.detection.near_min_height_ratio,
                 )
-                logger.debug("Frame processed in %.2fs -> %s",
-                             time.time() - start_time, last_status.label)
 
                 # One event per visit: fire after debounce, then cooldown.
                 if gate.observe(present) and last_people:
@@ -246,12 +270,15 @@ def run_once(cfg: Config, image_path, send_email=True):
     detector = build_detector(cfg)
     face_locations, face_names = process_frame(frame, known_encodings, known_names, cfg)
     detections = detector.detect(frame)
-    people = classify_people(
-        _person_boxes(detections),
-        list(zip(face_locations, face_names)),
-        _carried_boxes(detections),
-    )
-    if not people:
-        logger.info("No person found in %s; nothing to do", image_path)
+    faces = list(zip(face_locations, face_names))
+    people, present, max_ratio = _select_people(frame, detections, faces, cfg)
+
+    # Surface the measured size so the proximity threshold can be calibrated:
+    # set detection.near_min_height_ratio just below this for a person at the door.
+    logger.info("Largest person height ratio in image: %.2f (near threshold=%.2f)",
+                max_ratio, cfg.detection.near_min_height_ratio)
+
+    if not present or not people:
+        logger.info("No one near enough in %s; nothing to do", image_path)
         return None
     return emit_event(frame, people, cfg, send_email=send_email)

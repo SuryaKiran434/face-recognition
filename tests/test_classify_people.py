@@ -1,4 +1,27 @@
-from face_recognition_app.decision import classify_people
+from face_recognition_app.decision import (
+    PersonResult,
+    aggregate_status,
+    classify_people,
+)
+
+
+def _pr(label, name=None):
+    return PersonResult(label, name, (0, 0, 1, 1), ())
+
+
+def test_aggregate_status_empty_is_none():
+    assert aggregate_status([]).label == "none"
+
+
+def test_aggregate_status_prefers_known():
+    status = aggregate_status([_pr("unknown"), _pr("known", "Surya")])
+    assert status.label == "known"
+    assert status.name == "Surya"
+
+
+def test_aggregate_status_delivery_over_unknown():
+    status = aggregate_status([_pr("unknown"), _pr("likely_delivery")])
+    assert status.label == "likely_delivery"
 
 
 # Faces are (top, right, bottom, left); person boxes are (x1, y1, x2, y2).

@@ -95,6 +95,22 @@ def classify(
     return DoorStatus("unknown", None, 0.5, ("unknown person at the door",))
 
 
+def aggregate_status(people):
+    """Collapse a list of PersonResult into one DoorStatus for the live banner.
+    Precedence: a known person is the most informative thing to surface."""
+    if not people:
+        return DoorStatus("none", None, 0.0, ())
+    labels = {p.label for p in people}
+    if "known" in labels:
+        names = [p.name for p in people if p.label == "known" and p.name]
+        name = names[0] if names else None
+        return DoorStatus("known", name, 1.0,
+                          (f"recognised {name}",) if name else ())
+    if "likely_delivery" in labels:
+        return DoorStatus("likely_delivery", None, 0.6, ("unknown face",))
+    return DoorStatus("unknown", None, 0.5, ("unknown person at the door",))
+
+
 @dataclass(frozen=True)
 class PersonResult:
     """One person detected in a frame, with their classification and the
