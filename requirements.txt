@@ -6,3 +6,4 @@ numpy==2.2.1
 opencv-python==4.10.0.84
 pillow==12.2.0
 pillow-heif==0.18.0
+ultralytics==8.4.80

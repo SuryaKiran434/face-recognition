@@ -32,6 +32,64 @@ def coerce_camera_source(value):
 
 
 @dataclass(frozen=True)
+class DetectionConfig:
+    """Object-detection settings (the YOLO person/package stage)."""
+
+    enabled: bool = True
+    weights: str = "yolov8n.pt"
+    confidence: float = 0.4
+    person_dwell_seconds: float = 8.0
+
+    @classmethod
+    def from_dict(cls, data):
+        data = data or {}
+        return cls(
+            enabled=bool(data.get("enabled", True)),
+            weights=str(data.get("weights", "yolov8n.pt")),
+            confidence=float(data.get("confidence", 0.4)),
+            person_dwell_seconds=float(data.get("person_dwell_seconds", 8.0)),
+        )
+
+
+@dataclass(frozen=True)
+class EventsConfig:
+    """Detection-event behaviour (debounce, cooldown, snapshots, retention)."""
+
+    debounce_frames: int = 3
+    cooldown_seconds: float = 120.0
+    retention_days: int = 14
+    snapshots_dir: str = "snapshots"
+    log_path: str = "events.jsonl"
+
+    @classmethod
+    def from_dict(cls, data):
+        data = data or {}
+        return cls(
+            debounce_frames=int(data.get("debounce_frames", 3)),
+            cooldown_seconds=float(data.get("cooldown_seconds", 120.0)),
+            retention_days=int(data.get("retention_days", 14)),
+            snapshots_dir=str(data.get("snapshots_dir", "snapshots")),
+            log_path=str(data.get("log_path", "events.jsonl")),
+        )
+
+
+@dataclass(frozen=True)
+class NotifyConfig:
+    """Email-notification settings (credentials live in .env, never here)."""
+
+    enabled: bool = True
+    email_on: tuple = ("known", "unknown", "likely_delivery")
+
+    @classmethod
+    def from_dict(cls, data):
+        data = data or {}
+        return cls(
+            enabled=bool(data.get("enabled", True)),
+            email_on=tuple(data.get("email_on", ["known", "unknown", "likely_delivery"])),
+        )
+
+
+@dataclass(frozen=True)
 class Config:
     encodings_dir: str
     face_recognition_threshold: float
@@ -39,6 +97,9 @@ class Config:
     process_frame_interval: int
     face_detection_model: str = "hog"
     camera_source: Union[int, str] = 0
+    detection: DetectionConfig = DetectionConfig()
+    events: EventsConfig = EventsConfig()
+    notify: NotifyConfig = NotifyConfig()
 
     @classmethod
     def load(cls, path=None):
@@ -52,4 +113,7 @@ class Config:
             process_frame_interval=int(data["process_frame_interval"]),
             face_detection_model=str(data.get("face_detection_model", "hog")),
             camera_source=coerce_camera_source(data.get("camera_source", 0)),
+            detection=DetectionConfig.from_dict(data.get("detection")),
+            events=EventsConfig.from_dict(data.get("events")),
+            notify=NotifyConfig.from_dict(data.get("notify")),
         )

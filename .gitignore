@@ -27,3 +27,9 @@ encodings/
 *.pkl
 *.npy
 *.npz
+
+# Door system: model weights, captured snapshots, event log, secrets
+*.pt
+snapshots/
+events.jsonl
+.env
