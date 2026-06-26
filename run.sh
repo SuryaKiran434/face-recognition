@@ -16,6 +16,20 @@
 
 set -euo pipefail
 
+# Some Python builds (notably pyenv interpreters compiled without blake2
+# support) make hashlib log a multi-line "unsupported hash type blake2b/blake2s"
+# traceback to stderr at import time. It is harmless — nothing here uses blake2,
+# and sha256 still works — but it floods the output on every invocation. This
+# filter drops only that specific block, leaving all other output intact.
+filter_hash_noise() {
+  awk '
+    /^ERROR:root:code for hash (blake2b|blake2s) was not found\./ { skip=1 }
+    skip && /^ValueError: unsupported hash type/ { skip=0; next }
+    skip { next }
+    { print }
+  '
+}
+
 # Resolve the repo root (directory containing this script) so the app can be
 # launched from anywhere.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,13 +57,15 @@ fi
 if [ ! -f "$STAMP_FILE" ] || [ requirements.txt -nt "$STAMP_FILE" ]; then
   echo ">> Installing dependencies from requirements.txt"
   echo "   (dlib compiles from source on first install and may take several minutes)"
-  "$PYTHON_BIN" -m pip install --upgrade pip
-  "$PYTHON_BIN" -m pip install -r requirements.txt
+  "$PYTHON_BIN" -m pip install --upgrade pip 2>&1 | filter_hash_noise
+  "$PYTHON_BIN" -m pip install -r requirements.txt 2>&1 | filter_hash_noise
   touch "$STAMP_FILE"
 else
   echo ">> Dependencies up to date; skipping install"
 fi
 
-# 3. Launch the application, forwarding any extra arguments.
+# 3. Launch the application, forwarding any extra arguments. Output is piped
+#    through the hash-noise filter (so we cannot exec); pipefail propagates a
+#    non-zero exit from Python rather than from the filter.
 echo ">> Starting real-time face recognition (press 'q' in the window to quit)"
-exec "$PYTHON_BIN" scripts/real_time_recognition.py "$@"
+"$PYTHON_BIN" scripts/real_time_recognition.py "$@" 2>&1 | filter_hash_noise
