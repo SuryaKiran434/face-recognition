@@ -39,9 +39,9 @@ class DetectionConfig:
     weights: str = "yolov8n.pt"
     confidence: float = 0.4
     # Proximity gate: a person only counts as "near" (and thus triggers an
-    # event) when their bounding box is at least this fraction of the frame
-    # height. 0 disables the gate (any detected person triggers).
-    near_min_height_ratio: float = 0.0
+    # event) when their bounding box occupies at least this fraction of the
+    # frame area. 0 disables the gate (any detected person triggers).
+    near_min_area_ratio: float = 0.0
 
     @classmethod
     def from_dict(cls, data):
@@ -50,7 +50,7 @@ class DetectionConfig:
             enabled=bool(data.get("enabled", True)),
             weights=str(data.get("weights", "yolov8n.pt")),
             confidence=float(data.get("confidence", 0.4)),
-            near_min_height_ratio=float(data.get("near_min_height_ratio", 0.0)),
+            near_min_area_ratio=float(data.get("near_min_area_ratio", 0.0)),
         )
 
 

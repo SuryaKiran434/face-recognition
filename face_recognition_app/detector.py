@@ -39,24 +39,27 @@ def carried_objects(detections):
     return [d.label for d in detections if d.label != PERSON_LABEL]
 
 
-def person_height_ratio(box, frame_height):
-    """How tall a person box is relative to the frame (0..1). Used as a
-    proximity proxy — a nearby person fills more of the frame."""
-    if not frame_height:
+def person_area_ratio(box, frame_width, frame_height):
+    """Fraction of the frame area a person box occupies (0..1). A nearby person
+    is both tall and wide, so area is a better proximity proxy than height alone
+    (a distant full-body figure is tall but thin)."""
+    if not frame_width or not frame_height:
         return 0.0
     x1, y1, x2, y2 = box
-    return (y2 - y1) / frame_height
+    w = max(0, x2 - x1)
+    h = max(0, y2 - y1)
+    return (w * h) / (frame_width * frame_height)
 
 
-def near_person_boxes(person_boxes, frame_height, min_ratio):
-    """Person boxes considered 'near' — tall enough relative to the frame.
+def near_person_boxes(person_boxes, frame_width, frame_height, min_ratio):
+    """Person boxes considered 'near' — occupying enough of the frame area.
 
     min_ratio <= 0 disables the filter (every person counts as near)."""
     if min_ratio <= 0:
         return list(person_boxes)
     return [
         box for box in person_boxes
-        if person_height_ratio(box, frame_height) >= min_ratio
+        if person_area_ratio(box, frame_width, frame_height) >= min_ratio
     ]
 
 

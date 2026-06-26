@@ -18,7 +18,7 @@ from face_recognition_app.detector import (
     PERSON_LABEL,
     build_detector,
     near_person_boxes,
-    person_height_ratio,
+    person_area_ratio,
 )
 from face_recognition_app.events import EventGate, purge_old, save_event
 from face_recognition_app.matching import match_faces
@@ -124,20 +124,22 @@ def _select_people(frame, detections, faces, cfg):
     found no persons at all (detection disabled/unavailable), fall back to
     faces — proximity can't be measured without person boxes.
     """
-    frame_h = frame.shape[0]
+    frame_h, frame_w = frame.shape[0], frame.shape[1]
     person_boxes = _person_boxes(detections)
     carried = _carried_boxes(detections)
-    ratio = cfg.detection.near_min_height_ratio
+    ratio = cfg.detection.near_min_area_ratio
 
     if person_boxes:
-        near = near_person_boxes(person_boxes, frame_h, ratio)
+        near = near_person_boxes(person_boxes, frame_w, frame_h, ratio)
         people = classify_people(near, faces, carried) if near else []
         present = bool(near)
     else:
         people = classify_people([], faces, carried)
         present = bool(people)
 
-    max_ratio = max((person_height_ratio(b, frame_h) for b in person_boxes), default=0.0)
+    max_ratio = max(
+        (person_area_ratio(b, frame_w, frame_h) for b in person_boxes), default=0.0
+    )
     return people, present, max_ratio
 
 
@@ -215,9 +217,9 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
                 )
                 last_status = aggregate_status(last_people)
                 logger.debug(
-                    "Frame in %.2fs -> %s (largest person height=%.2f, near>=%.2f)",
+                    "Frame in %.2fs -> %s (largest person area=%.3f, near>=%.3f)",
                     time.time() - start_time, last_status.label,
-                    max_ratio, cfg.detection.near_min_height_ratio,
+                    max_ratio, cfg.detection.near_min_area_ratio,
                 )
 
                 # One event per visit: fire after debounce, then cooldown.
@@ -265,9 +267,9 @@ def run_once(cfg: Config, image_path, send_email=True):
     people, present, max_ratio = _select_people(frame, detections, faces, cfg)
 
     # Surface the measured size so the proximity threshold can be calibrated:
-    # set detection.near_min_height_ratio just below this for a person at the door.
-    logger.info("Largest person height ratio in image: %.2f (near threshold=%.2f)",
-                max_ratio, cfg.detection.near_min_height_ratio)
+    # set detection.near_min_area_ratio just below this for a person at the door.
+    logger.info("Largest person area ratio in image: %.3f (near threshold=%.3f)",
+                max_ratio, cfg.detection.near_min_area_ratio)
 
     if not present or not people:
         logger.info("No one near enough in %s; nothing to do", image_path)

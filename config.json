@@ -8,6 +8,6 @@
   "detection": {
     "enabled": true,
     "confidence": 0.4,
-    "near_min_height_ratio": 0.5
+    "near_min_area_ratio": 0.45
   }
 }
