@@ -176,7 +176,7 @@ def _build_html(headline, friendly, people):
         )
         img_html = (
             f'<img src="cid:person{i}" width="120" '
-            f'style="border-radius:8px;display:block;" alt="person {i}">'
+            f'style="border-radius:8px;display:block;" alt="{_who(person)}">'
             if person.get("image") else ""
         )
         cards.append(
@@ -200,7 +200,7 @@ def _build_html(headline, friendly, people):
         f'{"".join(cards)}'
         '<div style="margin-top:8px;">'
         '<div style="color:#888;font-size:13px;margin-bottom:6px;">Full view</div>'
-        '<img src="cid:frame" style="width:100%;border-radius:10px;" alt="full frame">'
+        '<img src="cid:frame" style="width:100%;border-radius:10px;" alt="Full view">'
         '</div>'
         '<p style="color:#aaa;font-size:12px;margin-top:18px;">'
         'Sent by your Door Monitor.</p></div>'
