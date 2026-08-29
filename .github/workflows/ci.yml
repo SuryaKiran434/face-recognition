@@ -31,10 +31,34 @@ jobs:
       # DetectorImpl, so neither is reachable from tests. Installing
       # requirements.txt would compile dlib from source and pull torch for
       # no benefit.
+      #   pytest-cov -- coverage reporting. Named explicitly here rather than
+      #              installed via requirements-dev.txt, because that file
+      #              pulls in requirements.txt (and therefore dlib).
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy opencv-python-headless pillow pillow-heif pytest
+          pip install numpy opencv-python-headless pillow pillow-heif pytest pytest-cov
 
+      # `face_recognition_app` is the source package; everything else at the
+      # repo root is tests, scripts and data.
       - name: Run pytest
-        run: python -m pytest -q
+        run: |
+          python -m pytest -q \
+            --cov=face_recognition_app --cov-report=xml --cov-report=term
+
+      - name: Coverage summary
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          rate = float(ET.parse("coverage.xml").getroot().get("line-rate"))
+          print("## Coverage")
+          print()
+          print(f"**{rate * 100:.2f}%** of statements in `face_recognition_app/` covered.")
+          EOF
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: error
