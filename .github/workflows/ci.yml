@@ -17,17 +17,24 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # The suite deliberately does NOT install dlib or ultralytics.
-      # No test imports `recognizer` (the only dlib consumer), and YOLO is
-      # imported lazily inside DetectorImpl, so neither is reachable from
-      # tests. Installing requirements.txt would compile dlib from source
-      # and pull torch for no benefit.
-      # opencv-python-headless replaces opencv-python: same cv2 API, no
-      # libGL system dependency on the runner.
+      # Installed: what the tested modules actually import.
+      #   numpy   -- encodings, matching, events fixtures
+      #   opencv-python-headless -- replaces opencv-python: same cv2 API, no
+      #              libGL system dependency on the runner
+      #   pillow + pillow-heif -- `preprocessor` is the only Pillow consumer
+      #              and imports pillow_heif at module scope, registering the
+      #              HEIF opener; without both, tests/test_preprocessor.py
+      #              would silently skip and Pillow bumps would go unverified
+      #   pytest  -- runner
+      # NOT installed: dlib and ultralytics. No test imports `recognizer`
+      # (the only dlib consumer), and YOLO is imported lazily inside
+      # DetectorImpl, so neither is reachable from tests. Installing
+      # requirements.txt would compile dlib from source and pull torch for
+      # no benefit.
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy opencv-python-headless pytest
+          pip install numpy opencv-python-headless pillow pillow-heif pytest
 
       - name: Run pytest
         run: python -m pytest -q
