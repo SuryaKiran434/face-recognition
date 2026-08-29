@@ -26,7 +26,7 @@ from face_recognition_app.detector import (
     person_area_ratio,
 )
 from face_recognition_app.events import EventGate, purge_old, save_event
-from face_recognition_app.matching import match_faces
+from face_recognition_app.matching import match_faces, squared_norms
 from face_recognition_app.smoothing import LabelSmoother
 
 
@@ -89,7 +89,7 @@ def load_encodings(encodings_dir):
             np.concatenate(names_list, axis=0))
 
 
-def process_frame(frame, known_encodings, known_names, cfg):
+def process_frame(frame, known_encodings, known_names, cfg, known_sq=None):
     small_bgr = cv2.resize(frame, (0, 0), fx=cfg.resize_factor, fy=cfg.resize_factor)
     small_frame = cv2.cvtColor(small_bgr, cv2.COLOR_BGR2RGB)
     scale_factor = frame.shape[1] / small_frame.shape[1]
@@ -109,7 +109,8 @@ def process_frame(frame, known_encodings, known_names, cfg):
     ]
 
     names = match_faces(
-        known_encodings, known_names, face_encodings, cfg.face_recognition_threshold
+        known_encodings, known_names, face_encodings,
+        cfg.face_recognition_threshold, known_sq=known_sq,
     )
     return face_locations, names
 
@@ -204,6 +205,8 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
     logger.info("Loaded %d encodings", len(known_encodings))
     if len(known_encodings) == 0:
         raise ValueError(f"no .npz encoding files found in {cfg.encodings_dir}")
+    # Computed once here, not once per frame, and reused by every match_faces call.
+    known_sq = squared_norms(known_encodings)
 
     detector = build_detector(cfg)
     purge_old(cfg.events.snapshots_dir, cfg.events.log_path, cfg.events.retention_days)
@@ -236,7 +239,7 @@ def run_recognizer(cfg: Config, send_email=True, headless=False):
             if frame_count % cfg.process_frame_interval == 0:
                 start_time = time.time()
                 last_face_locations, last_face_names = process_frame(
-                    frame, known_encodings, known_names, cfg
+                    frame, known_encodings, known_names, cfg, known_sq=known_sq
                 )
                 last_detections = detector.detect(frame)
 
