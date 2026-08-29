@@ -18,6 +18,7 @@ venv/
 # Test / build artifacts
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 build/
 dist/
