@@ -29,28 +29,12 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # Installed: what the tested modules actually import.
-      #   numpy   -- encodings, matching, events fixtures
-      #   opencv-python-headless -- replaces opencv-python: same cv2 API, no
-      #              libGL system dependency on the runner
-      #   pillow + pillow-heif -- `preprocessor` is the only Pillow consumer
-      #              and imports pillow_heif at module scope, registering the
-      #              HEIF opener; without both, tests/test_preprocessor.py
-      #              would silently skip and Pillow bumps would go unverified
-      #   pytest  -- runner
-      # NOT installed: dlib and ultralytics. No test imports `recognizer`
-      # (the only dlib consumer), and YOLO is imported lazily inside
-      # DetectorImpl, so neither is reachable from tests. Installing
-      # requirements.txt would compile dlib from source and pull torch for
-      # no benefit.
-      #   pytest-cov -- coverage reporting. Named explicitly here rather than
-      #              installed via requirements-dev.txt, because that file
-      #              pulls in requirements.txt (and therefore dlib).
-      #
-      # Versions are pinned to what run 33278499626 -- the last green run on
-      # main -- already resolved, so this locks the set rather than moving it.
-      # The cost is that Dependabot cannot see them: it reads manifests, not
-      # ad-hoc pip command lines, so these six are manual maintenance now.
+      # The pinned set lives in requirements-ci.txt, which documents what is
+      # installed, what is deliberately left out (dlib, ultralytics), and why.
+      # It is a manifest rather than a pip command line specifically so that
+      # Dependabot can read it -- the previous ad-hoc `pip install ...` line was
+      # invisible to it, and CI silently kept testing pillow-heif 1.5.0 after
+      # requirements.txt had moved to 1.6.0.
       #
       # `--only-binary :all:` makes pip refuse source distributions, so no
       # package's setup.py executes on the runner. Verified against the
@@ -63,9 +47,7 @@ jobs:
       # image moves ahead, so the line is gone instead.
       - name: Install test dependencies
         run: |
-          pip install numpy==2.5.2 opencv-python-headless==5.0.0.93 \
-            pillow==12.3.0 pillow-heif==1.5.0 pytest==9.1.1 pytest-cov==7.1.0 \
-            --only-binary :all:
+          pip install -r requirements-ci.txt --only-binary :all:
 
       # `face_recognition_app` is the source package; everything else at the
       # repo root is tests, scripts and data.
