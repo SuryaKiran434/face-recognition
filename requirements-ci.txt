@@ -14,11 +14,14 @@
 # imports it, and YOLO is imported lazily inside DetectorImpl.
 #
 # Keep the versions here matching requirements.txt. The one intended difference
-# is opencv: the headless build has the same cv2 API but no libGL system
-# dependency, which the runner does not have.
+# is the opencv DISTRIBUTION: the headless build has the same cv2 API but no
+# libGL system dependency, which the runner does not have. The VERSION must
+# still track requirements.txt -- CI previously ran headless 5.0.0.93 against a
+# shipped opencv-python 4.14.0.94, a whole major apart, so the tests exercised
+# an OpenCV the application never runs.
 
 numpy==2.5.2
-opencv-python-headless==5.0.0.93
+opencv-python-headless==4.14.0.94
 pillow==12.3.0
 pillow-heif==1.6.0
 pytest==9.1.1
