@@ -1,0 +1,25 @@
+# CI-only dependency set, installed by .github/workflows/ci.yml.
+#
+# This file exists so Dependabot can SEE these pins. They used to sit on an
+# ad-hoc `pip install` command line inside ci.yml, which Dependabot cannot read
+# -- it parses manifests, not shell. The consequence showed up in practice: when
+# Dependabot bumped pillow-heif to 1.6.0 in requirements.txt, CI carried on
+# testing 1.5.0, so the version actually shipped was the one version never
+# exercised. A manifest keeps the two in step without anyone remembering to.
+#
+# Deliberately NOT `-r requirements.txt`, and deliberately not requirements-dev.txt
+# (whose first line is `-r requirements.txt`): that would pull dlib, which
+# compiles from source, and ultralytics, which drags in torch. Neither is
+# reachable from the tests -- `recognizer` is the only dlib consumer and no test
+# imports it, and YOLO is imported lazily inside DetectorImpl.
+#
+# Keep the versions here matching requirements.txt. The one intended difference
+# is opencv: the headless build has the same cv2 API but no libGL system
+# dependency, which the runner does not have.
+
+numpy==2.5.2
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+pillow-heif==1.6.0
+pytest==9.1.1
+pytest-cov==7.1.0
