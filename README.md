@@ -111,7 +111,7 @@ state.)
 
 ## Requirements
 
-- **Python 3.10+**
+- **Python 3.12+** — the pinned `numpy==2.5.2` requires it, and CI runs 3.12
 - A webcam, or an RTSP/HTTP camera URL
 - Build tooling for [dlib](http://dlib.net/) — it **compiles from source** on
   first install and can take several minutes:
@@ -120,7 +120,8 @@ state.)
 - Optional: a Gmail account with an App Password, if you want email alerts
 
 Pinned runtime dependencies live in [`requirements.txt`](requirements.txt);
-[`requirements-dev.txt`](requirements-dev.txt) adds `pytest` on top.
+[`requirements-dev.txt`](requirements-dev.txt) adds `pytest` and `pytest-cov` on
+top.
 
 ---
 
@@ -272,36 +273,51 @@ venv/bin/python -m pip install -r requirements-dev.txt
 venv/bin/python -m pytest
 ```
 
-**71 tests**, none of which need a camera, a model download, or a GPU.
+**88 tests**, none of which need a camera, a model download, or a GPU.
 
 More usefully: **the test suite requires neither dlib nor ultralytics.** No test
 imports `recognizer` (the only dlib consumer), and the `ultralytics` import is
 deferred into `YoloDetector.__init__`, so neither heavy dependency is reachable
-from a test run. That is why CI installs only three packages instead of
+from a test run. That is why CI installs a small pinned set instead of
 `requirements.txt`:
 
-```yaml
-pip install numpy opencv-python-headless pytest
+```bash
+pip install numpy==2.5.2 opencv-python-headless==5.0.0.93 \
+  pillow==12.3.0 pillow-heif==1.5.0 pytest==9.1.1 pytest-cov==7.1.0 \
+  --only-binary :all:
 ```
 
 `opencv-python-headless` stands in for `opencv-python`: identical `cv2` API,
-without the `libGL` system dependency the GitHub runner lacks. Installing the
-full requirements file would compile dlib from source and pull in torch for no
-benefit.
+without the `libGL` system dependency the GitHub runner lacks. `pillow` and
+`pillow-heif` are needed because `preprocessor` registers the HEIF opener at
+module scope, so `tests/test_preprocessor.py` cannot import without them.
+`--only-binary :all:` makes pip refuse source distributions, so no package's
+`setup.py` executes on the runner. Installing the full requirements file would
+compile dlib from source and pull in torch for no benefit.
 
-| Test file | Covers |
-| --- | --- |
-| `test_config.py` | `config.json` loading, defaults, camera-source coercion |
-| `test_matching.py` | `squared_norms`, `match_faces`, empty inputs, threshold edges |
-| `test_detector.py` | Area ratios, proximity filtering, detector fallback |
-| `test_decision.py` | `classify` precedence and `aggregate_status` |
-| `test_classify_people.py` | Face-to-person association and carried-object attribution |
-| `test_smoothing.py` | `LabelSmoother` majority vote and reset |
-| `test_events.py` | `EventGate` debounce/cooldown, `save_event`, `purge_old` |
-| `test_converter.py` | Legacy `.pkl` -> `.npz` migration |
+| Test file | Tests | Covers |
+| --- | --- | --- |
+| `test_preprocessor.py` | 17 | Resize/aspect ratio, RGB-JPEG normalization, `.heic` input, dataset sampling |
+| `test_matching.py` | 15 | `squared_norms`, `match_faces`, empty inputs, threshold edges |
+| `test_config.py` | 12 | `config.json` loading, defaults, camera-source coercion |
+| `test_decision.py` | 10 | `classify` precedence and `aggregate_status` |
+| `test_classify_people.py` | 10 | Face-to-person association and carried-object attribution |
+| `test_detector.py` | 7 | Area ratios, proximity filtering, detector fallback |
+| `test_events.py` | 7 | `EventGate` debounce/cooldown, `save_event`, `purge_old` |
+| `test_converter.py` | 5 | Legacy `.pkl` -> `.npz` migration |
+| `test_smoothing.py` | 5 | `LabelSmoother` majority vote and reset |
 
 CI runs on every push to `main` and every pull request. The **`Tests (Python)`**
-check is a required status check on `main`.
+check is a required status check on `main`. The same job measures coverage
+(`--cov=face_recognition_app`), uploads `coverage.xml` as a build artifact, and
+runs an advisory **SonarCloud** scan configured by `sonar-project.properties`;
+`continue-on-error` keeps a Sonar outage from failing the required check.
+
+`.github/dependabot.yml` opens **one grouped pull request per ecosystem per
+week** (`pip` and `github-actions`), collapsing that week's patch and minor
+bumps into a single PR. `.github/workflows/dependabot-auto-merge.yml` then
+enables auto-merge on those PRs, so they merge themselves once the required
+checks pass. Majors are kept out of the groups and wait for a human.
 
 ---
 
@@ -344,11 +360,13 @@ scripts/                   CLI entrypoints (thin click wrappers over the package
   encode_faces.py
   preprocessing.py
   convert_pickle.py
-tests/                     pytest unit tests (71, no dlib/ultralytics needed)
+tests/                     pytest unit tests (88, no dlib/ultralytics needed)
 config.json                runtime configuration
 .env.example               email-credential template
 requirements.txt           pinned runtime dependencies
-requirements-dev.txt       requirements.txt + pytest
+requirements-dev.txt       requirements.txt + pytest + pytest-cov
+sonar-project.properties   SonarCloud scan configuration, used by CI
+.github/                   CI workflow, Dependabot config, auto-merge workflow
 run.sh                     bootstrap deps and launch the app
 ```
 
