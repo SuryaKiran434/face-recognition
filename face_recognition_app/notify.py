@@ -1,13 +1,13 @@
 """Email notifications for the door system.
 
-Adapted from the sibling BrewAutomation project's notify.py: same Gmail
+Adapted from the sibling mac-upkeep project's notify.py (named
+BrewAutomation when this was copied): same Gmail
 SMTP_SSL transport, same `.env` variable names (SENDER_EMAIL,
 SENDER_APP_PASSWORD, RECIPIENT_EMAIL), and the same 0/1/2 exit-code contract —
 extended here to attach images (the per-person snapshots).
 
-Credentials are read from this repo's `.env` if present, otherwise from
-BrewAutomation's `.env`, so the existing Gmail app password is reused without
-copying secrets around. A real env var still overrides either file.
+Credentials are read from this repo's own `.env` (gitignored; see
+`.env.example`). A real environment variable still overrides the file.
 """
 
 from __future__ import annotations
@@ -23,10 +23,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _REPO_ENV = Path(__file__).resolve().parent.parent / ".env"
-_BREW_ENV = Path.home() / "IdeaProjects" / "BrewAutomation" / ".env"
 
 
-def load_env(paths=(_REPO_ENV, _BREW_ENV)):
+def load_env(paths=(_REPO_ENV,)):
     """Load key=value pairs from the first existing .env file(s) into the
     environment (without overriding real env vars)."""
     for path in paths:
