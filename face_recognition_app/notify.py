@@ -1,6 +1,7 @@
 """Email notifications for the door system.
 
-Adapted from the sibling BrewAutomation project's notify.py: same Gmail
+Adapted from the sibling mac-upkeep project's notify.py (named
+BrewAutomation when this was copied): same Gmail
 SMTP_SSL transport, same `.env` variable names (SENDER_EMAIL,
 SENDER_APP_PASSWORD, RECIPIENT_EMAIL), and the same 0/1/2 exit-code contract —
 extended here to attach images (the per-person snapshots).
