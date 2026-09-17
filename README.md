@@ -217,10 +217,9 @@ Python and would otherwise be read as device 0 or 1.
 
 Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in
 `SENDER_EMAIL`, `SENDER_APP_PASSWORD` (a Google **App password**, not your
-account password), and `RECIPIENT_EMAIL`. If this repo has no `.env`,
-`notify.py` falls back to `~/IdeaProjects/BrewAutomation/.env`, so an app
-password already configured there is reused rather than copied around. A real
-environment variable overrides either file.
+account password), and `RECIPIENT_EMAIL`. `notify.py` reads only this repo's
+own `.env` — there is no fallback to any other project's file. A real
+environment variable overrides the file.
 
 Running with `--no-email` skips sending entirely and still writes snapshots.
 
