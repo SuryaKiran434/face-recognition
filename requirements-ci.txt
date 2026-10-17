@@ -20,9 +20,9 @@
 # shipped opencv-python 4.14.0.94, a whole major apart, so the tests exercised
 # an OpenCV the application never runs.
 
-numpy==2.5.3
+numpy==2.5.4
 opencv-python-headless==4.14.0.94
 pillow==12.3.0
-pillow-heif==1.8.0
+pillow-heif==1.8.1
 pytest==9.1.1
 pytest-cov==7.1.0
